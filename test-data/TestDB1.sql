@@ -1,4 +1,4 @@
--- Database: TestDB2
+-- Database: TestDB1
 CREATE DATABASE IF NOT EXISTS `TestDB1`;
 USE `TestDB1`;
 
