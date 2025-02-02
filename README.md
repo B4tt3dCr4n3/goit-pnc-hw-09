@@ -46,7 +46,7 @@ mariadb -h127.0.0.1 -u test-user -p -P3306 \
 
 ### 2. Деплой бази даних `TestDB2`
 ```sh
-docker exec goit-pnc-hw-09-python-1 python /app/main.py --db_name TestDB2 --port 9393 --import_dump /app/test-data/TestDB2.sql
+docker exec goit-pnc-hw-09-python-1 python /app/main.py --db_name TestDB2 --port 9393 --import_dump /app.test-data/TestDB2.sql
 ```
 
 ### 3. Отримання розшифрованих даних із `TestDB2`
