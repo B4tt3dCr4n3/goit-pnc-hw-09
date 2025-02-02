@@ -1,0 +1,111 @@
+version: "3"
+
+volumes:
+    acra-server:
+
+services:
+    # Creating keys:
+    # - ./.acrakeys/acra-server/${ACRA_CLIENT_ID}_storage
+    # - ./.acrakeys/acra-writer/${ACRA_CLIENT_ID}_storage.pub
+    acra-keymaker_client:
+        image: "cossacklabs/acra-keymaker:${ACRA_DOCKER_IMAGE_TAG:-0.95.0}"
+        network_mode: "none"
+        environment:
+            ACRA_MASTER_KEY: ${ACRA_SERVER_MASTER_KEY}
+        volumes:
+            - acra-server:/keys
+            - ./ssl/acra-client/:/ssl:ro
+        command: >-
+            --client_id=""
+            --tls_cert=/ssl/acra-client.crt
+            --keys_output_dir=/keys/acra-server
+            --keys_public_output_dir=/keys/acra-server
+            --keystore=v1
+
+    mysql:
+        build:
+            context: ./
+            dockerfile: ./mysql/mysql.dockerfile
+       
+        # Configure credentials in .env file
+        environment:
+            # root user
+            # MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+            MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+
+            MYSQL_USER: ${MYSQL_USER:-test}
+            MYSQL_PASSWORD: ${MYSQL_PASSWORD:-test}
+            MYSQL_DATABASE: ${MYSQL_DATABASE:-test}
+        
+        volumes:
+            - ./mysql/mysql_data:/var/lib/mysql
+        ports:
+            - "3306:3306"
+        networks:
+            - server-mysql
+            - world
+
+    acra-server:
+        image: "cossacklabs/acra-server:${ACRA_DOCKER_IMAGE_TAG:-0.95.0}"
+        # Restart server after correct termination, for example after the config
+        # was changed through the API
+        restart: always
+        depends_on:
+            - acra-keymaker_client
+            - mysql
+        environment:
+            ACRA_MASTER_KEY: ${ACRA_SERVER_MASTER_KEY}
+            # GODEBUG: "netdns=go"
+        networks:
+            - server-mysql
+            - world
+        ports:
+            - "9393:9393"
+        volumes:
+            # Mount the directory with only the keys for this service. Must be
+            # rewriteable in case of using API, otherwise should be read-only.
+            #- keystore/acra-server:/keys
+            - acra-server:/data
+            # Directory with configuration, rewriteable
+            - ./ssl/acra-server/:/ssl
+            - ./ssl/mysql/mysql-ca.pem:/ssl/root.crt
+            - ./acra-server/acra-server-config:/config
+            - ./acra-server/encryptor_config.yaml:/config/extended_encryptor_config.yaml
+        command: >-
+            --token_db=/data/token.db
+            --keys_dir=/data/acra-server
+            --http_api_enable
+            --tls_auth=4
+            --tls_ca=/ssl/root.crt
+            --tls_cert=/ssl/acra-server.crt
+            --tls_key=/ssl/acra-server.key
+            --tls_client_id_from_cert
+            --tls_identifier_extractor_type=distinguished_name
+            --incoming_connection_api_string=tcp://0.0.0.0:9090
+            --incoming_connection_string=tcp://0.0.0.0:9393
+            --v
+            --tls_ocsp_from_cert=ignore
+            --tls_crl_from_cert=ignore
+            --config_file=/config/acra-server.yaml
+            --incoming_connection_prometheus_metrics_string=tcp://0.0.0.0:9399
+
+    python:
+        depends_on:
+            - acra-keymaker_client
+        build:
+            context: ./
+            dockerfile: ./python/python.dockerfile
+        networks:
+            - server-mysql
+        volumes:
+            - ./python/app:/app
+            - ./test-data/TestDB2.sql:/app.test-data/TestDB2.sql
+        environment:
+            MYSQL_USER: ${MYSQL_USER:-test}
+            MYSQL_PASSWORD: ${MYSQL_PASSWORD:-test}
+            MYSQL_DATABASE: ${MYSQL_DATABASE:-test}          
+
+networks:
+    world:
+    server-mysql:
+        internal: true
