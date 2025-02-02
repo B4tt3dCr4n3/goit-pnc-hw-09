@@ -14,6 +14,7 @@ cd ./goit-pnc-hw-09
 
 ### 2. Генерація SSL-сертифікатів та Acra master-key
 ```sh
+chmod +x ./certificates/ssl_gen.sh
 ./certificates/ssl_gen.sh
 ```
 
